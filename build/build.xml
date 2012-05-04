@@ -15,7 +15,7 @@
     </target>
 
 	<!-- Call build.properties for ci server db migration -->
-	<target name="configure">    
+    <target name="configure">    
         <property file="/var/lib/jenkins/jobdata/build.properties" />
     </target>
 
@@ -37,12 +37,12 @@
     </target>
 
     <target name="phpcpd">
-    <phpcpd>
-        <fileset dir="source/application">
-            <include name="**/*.php" />
-        </fileset>
-        <formatter type="pmd" outfile="build/log/pmd-cpd.xml"/>
-    </phpcpd>
+        <phpcpd>
+            <fileset dir="source/application">
+                <include name="**/*.php" />
+            </fileset>
+            <formatter type="pmd" outfile="build/log/pmd-cpd.xml"/>
+        </phpcpd>
     </target>
 
     <target name="phpmd">
@@ -82,30 +82,30 @@
         </exec>
     </target>
 
-	<!-- making an application.ini -->
-	<target name="app-ini">
-		<property name="testing.db.host" value="${db.host}" />
-		<property name="testing.db.username" value="${db.user}" />
-		<property name="testing.db.password" value="${db.pass}" />
-		<property name="testing.db.dbname" value="${db.name}" />
+    <!-- making an application.ini -->
+    <target name="app-ini">
+        <property name="testing.db.host" value="${db.host}" />
+        <property name="testing.db.username" value="${db.user}" />
+        <property name="testing.db.password" value="${db.pass}" />
+        <property name="testing.db.dbname" value="${db.name}" />
 
         <copy file="source/application/configs/application.ini.example" 
-              tofile="source/application/configs/application.ini" overwrite="true">
+            tofile="source/application/configs/application.ini" overwrite="true">
             <filterchain>
                 <expandproperties />
             </filterchain>
         </copy>
-	</target>
+    </target>
 
-	<!-- DBmigrate for the PHPUnit task -->
-	<target name="dbprepare">
-	<echo msg="Preparing database" />
+    <!-- DBmigrate for the PHPUnit task -->
+    <target name="dbprepare">
+        <echo msg="Preparing database" />
         <pdosqlexec url="${db.driver}:host=${db.host}" userid="${db.user}" password="${db.pass}">
             <fileset dir="deploy/sql/prepare/">
-              <include name="*.sql"/>
+                <include name="*.sql"/>
             </fileset>
         </pdosqlexec>
-	<echo msg="Done preparing the database" />
+        <echo msg="Done preparing the database" />
     </target>
 
     <!-- create our migration task -->
