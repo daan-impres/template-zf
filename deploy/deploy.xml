@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="deploy" default="deploy" basedir="">
+
+    <!-- timestamp for db migration tasks -->
+    <tstamp />
+
+    <target name="untar">
+        <mkdir dir="untar" />
+        <exec command="tar -xvf deploy.tar -C ./untar" checkreturn="true" />
+    </target>
+
+   <target name="pre-clean">
+        <property file="untar/deploy.properties" />
+        <delete quiet="true" includeemptydirs="true">
+            <fileset dir="./">
+                <include name="${serv.environment}" />
+            </fileset>
+        </delete>
+        <delete quiet="true" file=".htaccess" />
+        <delete quiet="true" dir="${serv.environment}sql/" />
+        <mkdir dir="${serv.environment}" />   
+        <mkdir dir="${serv.environment}sql" />   
+    </target>
+
+    <target name="app-ini">
+        <property name="production.db.host" value="${db.host}" />
+        <property name="production.db.username" value="${db.user}" />
+        <property name="production.db.password" value="${db.password}" />
+        <property name="production.db.dbname" value="${db.name}" />
+        <property name="testing.db.host" value="" />
+        <property name="testing.db.username" value="" />
+        <property name="testing.db.password" value="" />
+        <property name="testing.db.dbname" value="" />
+        <copy file="untar/source/application/configs/application.ini.example" 
+            tofile="untar/source/application/configs/application.ini" overwrite="true">
+
+            <filterchain>
+                <expandproperties />
+            </filterchain>
+        </copy>
+    </target>    
+  
+    <target name="copy" > 
+        <exec command="cp -rf untar/source/* ${serv.environment}" checkreturn="true"/>
+    </target>
+
+    <target name="htaccess">
+        <property name="domain-name" value="${domain.name}" />
+        <copy file="untar/root-htaccess"
+            tofile=".htaccess" overwrite="true">
+            
+            <filterchain>
+                <expandproperties />
+            </filterchain>
+        </copy>
+        <copy file="untar/public-htaccess"
+            tofile="${serv.environment}/public/.htaccess" overwrite="true">
+                
+            <filterchain>
+                <expandproperties />
+            </filterchain>
+        </copy>
+    </target>
+
+    <target name="chmod">
+        <echo message="chmodding" />
+    </target>
+   
+    <target name="dbprepare">
+        <echo msg="Preparing database" />
+        <pdosqlexec url="${db.driver}:host=${db.host}" userid="${db.user}" password="${db.password}">
+            <fileset dir="untar/deploy/sql/prepare/">
+                <include name="*.sql"/>
+            </fileset>
+        </pdosqlexec>
+        <echo msg="Done preparing the database" />
+    </target>
+
+    <!-- create our migration task -->
+    <target name="dbmigrate" description="Database Migrations">
+        <echo msg="Running database migrations..." />
+
+        <!-- these two filenames will contain the generated SQL to do the deploy and roll it back-->
+        <property name="build.dbdeploy.deployfile" value="deploy-${DSTAMP}${TSTAMP}.sql" />
+        <property name="build.dbdeploy.undofile" value="undo-${DSTAMP}${TSTAMP}.sql" />
+
+        <!-- generate the deployment scripts -->
+        <dbdeploy
+            url="${db.driver}:host=${db.host};dbname=${db.name}"
+            userid="${db.user}"
+            password="${db.password}"
+            checkall="true"
+            dir="untar/deploy/sql/deltas"
+            outputfile="${serv.environment}sql/${build.dbdeploy.deployfile}"
+            undooutputfile="${serv.environment}sql/${build.dbdeploy.undofile}" />
+
+        <!-- insert the deployment scripts -->
+        <echo msg="migrating new sql" />
+        <pdosqlexec url="${db.driver}:host=localhost;dbname=${db.name}" userid="${db.user}" password="${db.password}">
+            <fileset dir="${serv.environment}sql/">
+                <include name="deploy-*.sql" />
+            </fileset>
+        </pdosqlexec>
+    </target>
+    
+    <!-- cleanup files -->
+    <target name="clear">
+        <echo message="clearing" />
+        <delete dir="untar/" />
+        <delete file="deploy.tar/" />
+        <delete file="deploy.xml" />
+    </target>
+    
+	<target name="deploy" depends="untar, pre-clean, app-ini, copy, htaccess, chmod, dbprepare ,dbmigrate, clear" />
+</project>

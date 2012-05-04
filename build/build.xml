@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="${env.JOB_NAME}" default="build" basedir="../">
+
+    <!-- timestamp required for creating unique names -->
+    <tstamp />
+
+ 	<!-- Preparation create required directories -->
+    <target name="prepare">
+        <echo msg="Making directory build" />
+        <mkdir dir="build" />
+        <mkdir dir="build/log" />
+        <mkdir dir="build/log/code-browser" />
+        <mkdir dir="build/log/phpunit" />
+        <mkdir dir="api" />
+    </target>
+
+	<!-- Call build.properties for ci server db migration -->
+	<target name="configure">    
+        <property file="/var/lib/jenkins/jobdata/build.properties" />
+    </target>
+
+    <!-- Run some tools on the sourcecode -->
+    <target name="docblox">
+        <docblox title="Api docs" destdir="api">
+            <fileset dir="source/application">
+                <include name="**/*.php" />
+            </fileset>
+        </docblox>
+    </target>
+
+    <target name="codesniffer">
+        <phpcodesniffer
+            standard="PEAR"
+            file="source/application">
+            <formatter type="checkstyle" outfile="build/log/checkstyle.xml"/>
+        </phpcodesniffer>
+    </target>
+
+    <target name="phpcpd">
+    <phpcpd>
+        <fileset dir="source/application">
+            <include name="**/*.php" />
+        </fileset>
+        <formatter type="pmd" outfile="build/log/pmd-cpd.xml"/>
+    </phpcpd>
+    </target>
+
+    <target name="phpmd">
+        <phpmd file="source/application"
+            rulesets="rule">
+            <formatter type="xml" outfile="build/log/pmd.xml" />
+        </phpmd>
+    </target>
+
+    <target name="phpdepend">
+        <phpdepend>
+            <fileset dir="source/application">
+                <include name="**/*.php"/>
+            </fileset>
+            <logger type="jdepend-xml" outfile="build/log/jdepend.xml" />
+            <analyzer type="coderank-mode" value="method" />
+        </phpdepend>
+    </target>
+
+    <target name="phploc" description="Measure project size using PHPLOC">
+        <exec executable="phploc" passthru="true">
+            <arg value="--log-csv" />
+            <arg value="build/log/phploc.csv" />
+            <arg path="./" />
+        </exec>
+    </target>
+
+    <target name="phpcb"
+        description="Aggregate tool output with PHP_CodeBrowser">
+        <exec executable="phpcb" passthru="true">
+            <arg value="--log" />
+            <arg path="build/log" />
+            <arg value="--source" />
+            <arg path="source/application" />
+            <arg value="--output" />
+            <arg path="build/log/code-browser" />
+        </exec>
+    </target>
+
+	<!-- making an application.ini -->
+	<target name="app-ini">
+		<property name="testing.db.host" value="${db.host}" />
+		<property name="testing.db.username" value="${db.user}" />
+		<property name="testing.db.password" value="${db.pass}" />
+		<property name="testing.db.dbname" value="${db.name}" />
+
+        <copy file="source/application/configs/application.ini.example" 
+              tofile="source/application/configs/application.ini" overwrite="true">
+            <filterchain>
+                <expandproperties />
+            </filterchain>
+        </copy>
+	</target>
+
+	<!-- DBmigrate for the PHPUnit task -->
+	<target name="dbprepare">
+	<echo msg="Preparing database" />
+        <pdosqlexec url="${db.driver}:host=${db.host}" userid="${db.user}" password="${db.pass}">
+            <fileset dir="deploy/sql/prepare/">
+              <include name="*.sql"/>
+            </fileset>
+        </pdosqlexec>
+	<echo msg="Done preparing the database" />
+    </target>
+
+    <!-- create our migration task -->
+    <target name="dbmigrate" description="Database Migrations">
+        <echo msg="Running database migrations..." />
+
+        <!-- these two filenames will contain the generated SQL to do the deploy and roll it back-->
+        <property name="build.dbdeploy.deployfile" value="deploy-${DSTAMP}${TSTAMP}.sql" />
+        <property name="build.dbdeploy.undofile" value="undo-${DSTAMP}${TSTAMP}.sql" />
+
+        <!-- generate the deployment scripts -->
+        <dbdeploy
+            url="${db.driver}:host=${db.host};dbname=${db.name}"
+            userid="${db.user}"
+            password="${db.pass}"
+            checkall="true"
+            dir="deploy/sql/deltas"
+            outputfile="deploy/sql/scripts/${build.dbdeploy.deployfile}"
+            undooutputfile="deploy/sql/scripts/${build.dbdeploy.undofile}" />
+
+        <!-- insert the deployment scripts -->
+        <echo msg="migrating new sql" />
+        <pdosqlexec url="${db.driver}:host=localhost;dbname=${db.name}" userid="${db.user}" 
+					password="${db.pass}" src="deploy/sql/scripts/deploy-${DSTAMP}${TSTAMP}.sql">
+        </pdosqlexec>
+    </target>
+		
+	
+    <!-- PHPUnit task run unit tests (binary is called phpunit34 because an older version is required for Zend Framework) -->
+    <target name="phpunit">
+        <exec executable="phpunit34" dir="source/tests" passthru="true" >
+        </exec>
+    </target>
+	
+    <!-- Cleanup the files created by the build which aren't required anymore -->
+	<target name="post-cleanup">
+		<pdosqlexec url="${db.driver}:host=localhost;dbname=${db.name}" userid="${db.user}" password="${db.pass}" src="deploy/sql/scripts/cleanup.sql" />
+		<echo message="Cleared the database" />
+		<delete file="source/application/configs/application.ini" />
+		<delete>
+			<fileset dir="deploy/sql/scripts">
+				<include name="undo*.sql" />
+				<include name="deploy*.sql" />
+		    </fileset>
+		</delete>
+	</target>
+
+    <target name="build" depends="prepare, docblox, codesniffer, phpcpd, phpmd, phpdepend, phploc, phpcb, dbdeploy, app-ini, phpunit, post-cleanup" /> 
+	<target name="dbdeploy" depends="configure, dbprepare, dbmigrate" />
+</project>
