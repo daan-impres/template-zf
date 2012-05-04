@@ -4,7 +4,7 @@
     <!-- timestamp required for creating unique names -->
     <tstamp />
 
- 	<!-- Preparation create required directories -->
+    <!-- Preparation create required directories -->
     <target name="prepare">
         <echo msg="Making directory build" />
         <mkdir dir="build" />
