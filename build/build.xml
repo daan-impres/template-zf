@@ -141,17 +141,17 @@
     </target>
 	
     <!-- Cleanup the files created by the build which aren't required anymore -->
-	<target name="post-cleanup">
-		<pdosqlexec url="${db.driver}:host=localhost;dbname=${db.name}" userid="${db.user}" password="${db.pass}" src="deploy/sql/scripts/cleanup.sql" />
-		<echo message="Cleared the database" />
-		<delete file="source/application/configs/application.ini" />
-		<delete>
-			<fileset dir="deploy/sql/scripts">
-				<include name="undo*.sql" />
-				<include name="deploy*.sql" />
-		    </fileset>
-		</delete>
-	</target>
+    <target name="post-cleanup">
+        <pdosqlexec url="${db.driver}:host=localhost;dbname=${db.name}" userid="${db.user}" password="${db.pass}" src="deploy/sql/scripts/cleanup.sql" />
+        <echo message="Cleared the database" />
+        <delete file="source/application/configs/application.ini" />
+        <delete>
+            <fileset dir="deploy/sql/scripts">
+                <include name="undo*.sql" />
+                <include name="deploy*.sql" />
+            </fileset>
+        </delete>
+    </target>
 
     <target name="build" depends="prepare, docblox, codesniffer, phpcpd, phpmd, phpdepend, phploc, phpcb, dbdeploy, app-ini, phpunit, post-cleanup" /> 
 	<target name="dbdeploy" depends="configure, dbprepare, dbmigrate" />
