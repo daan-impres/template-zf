@@ -1,27 +1,30 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <project name="deploy" default="deploy" basedir="">
 
-    <!-- timestamp for db migration tasks -->
+    <!-- Timestamp for db migration tasks -->
     <tstamp />
 
+    <!-- Untar the tar send by Ci -->
     <target name="untar">
         <mkdir dir="untar" />
         <exec command="tar -xvf deploy.tar -C ./untar" checkreturn="true" />
     </target>
 
-   <target name="pre-clean">
+    <!-- Clean the directory before deploying -->
+    <target name="pre-clean">
         <property file="untar/deploy.properties" />
         <delete quiet="true" includeemptydirs="true">
             <fileset dir="./">
                 <include name="${serv.environment}" />
             </fileset>
         </delete>
-        <delete quiet="true" file=".htaccess" />
         <delete quiet="true" dir="${serv.environment}sql/" />
-        <mkdir dir="${serv.environment}" />   
-        <mkdir dir="${serv.environment}sql" />   
+        <mkdir dir="${serv.environment}" />
+        <mkdir dir="${serv.environment}sql" />
+        <mkdir dir="deploy-data" />
     </target>
 
+    <!-- Write out application.ini -->
     <target name="app-ini">
         <property name="production.db.host" value="${db.host}" />
         <property name="production.db.username" value="${db.user}" />
@@ -31,46 +34,31 @@
         <property name="testing.db.username" value="" />
         <property name="testing.db.password" value="" />
         <property name="testing.db.dbname" value="" />
-        <copy file="untar/source/application/configs/application.ini.example" 
+        <copy file="untar/source/application/configs/application.ini.example"
             tofile="untar/source/application/configs/application.ini" overwrite="true">
 
             <filterchain>
                 <expandproperties />
             </filterchain>
         </copy>
-    </target>    
-  
-    <target name="copy" > 
+    </target>
+
+    <!-- Copy the source to the desired environment folder -->
+    <target name="copy" >
         <exec command="cp -rf untar/source/* ${serv.environment}" checkreturn="true"/>
     </target>
 
-    <target name="htaccess">
-        <property name="domain-name" value="${domain.name}" />
-        <copy file="untar/root-htaccess"
-            tofile=".htaccess" overwrite="true">
-            
-            <filterchain>
-                <expandproperties />
-            </filterchain>
-        </copy>
-        <copy file="untar/public-htaccess"
-            tofile="${serv.environment}/public/.htaccess" overwrite="true">
-                
-            <filterchain>
-                <expandproperties />
-            </filterchain>
-        </copy>
-    </target>
-
+    <!-- Chmod desired folders here can be different per project -->
     <target name="chmod">
         <echo message="chmodding" />
     </target>
-   
+
+    <!-- Prepare database which in this case is inserting the changelog table -->
     <target name="dbprepare">
         <echo msg="Preparing database" />
         <pdosqlexec url="${db.driver}:host=${db.host}" userid="${db.user}" password="${db.password}">
             <fileset dir="untar/deploy/sql/prepare/">
-                <include name="*.sql"/>
+            <include name="*.sql"/>
             </fileset>
         </pdosqlexec>
         <echo msg="Done preparing the database" />
@@ -102,14 +90,54 @@
             </fileset>
         </pdosqlexec>
     </target>
-    
+
+    <target name="begin-htaccess">
+        <echo file="tmp-htaccess" append="true">
+RewriteEngine On
+RewriteBase / 
+        </echo>
+    </target>
+
+    <!-- build htacces from all propertie files found in deploy-data directory>-->
+    <target name="htaccess">
+        <copy file="untar/${serv.environment}.properties" tofile="deploy-data/${serv.environment}.properties" overwrite="true" />
+            <foreach param="needed" absparam="absname" target="output" >
+                <fileset dir="deploy-data/" >
+                    <include name="*.properties" />
+                </fileset>
+            </foreach>
+            <copy file="untar/public-htaccess"
+                tofile="${serv.environment}/public/.htaccess" overwrite="true">
+
+            <filterchain>
+                <expandproperties />
+            </filterchain>
+        </copy>
+    </target>
+
+    <!--htaccess foreach loop -->
+    <target name="output">
+        <property file="${absname}" override="true" />
+        <echo file="tmp-htaccess" append="true">
+
+RewriteCond %{HTTP_HOST} ^(www.)?${domein}$
+RewriteCond %{DOCUMENT_ROOT}/${environment}/ -d
+RewriteRule (.*) /${domein}/public/$1 [NC,L]
+        </echo>
+    </target>
+
+    <!-- To reduce downtime build the htaccess and then copy it to the  location -->
+    <target name="write-htaccess">
+        <copy file="tmp-htaccess" tofile=".htaccess" overwrite="true" />
+    </target>
+
     <!-- cleanup files -->
-    <target name="clear">
-        <echo message="clearing" />
+    <target name="clean">
+        <echo message="cleaning" />
         <delete dir="untar/" />
         <delete file="deploy.tar/" />
         <delete file="deploy.xml" />
     </target>
-    
-	<target name="deploy" depends="untar, pre-clean, app-ini, copy, htaccess, chmod, dbprepare ,dbmigrate, clear" />
+
+    <target name="deploy" depends="untar, pre-clean, app-ini, copy, chmod, dbprepare ,dbmigrate, begin-htaccess, htaccess, write-htaccess, cleanup" />
 </project>
