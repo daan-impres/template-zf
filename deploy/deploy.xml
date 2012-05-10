@@ -120,9 +120,9 @@ RewriteBase /
         <property file="${absname}" override="true" />
         <echo file="tmp-htaccess" append="true">
 
-RewriteCond %{HTTP_HOST} ^(www.)?${domein}$
+RewriteCond %{HTTP_HOST} ^(www.)?${domain}$
 RewriteCond %{DOCUMENT_ROOT}/${environment}/ -d
-RewriteRule (.*) /${domein}/public/$1 [NC,L]
+RewriteRule (.*) /${environment}/public/$1 [NC,L]
         </echo>
     </target>
 
@@ -134,10 +134,11 @@ RewriteRule (.*) /${domein}/public/$1 [NC,L]
     <!-- cleanup files -->
     <target name="clean">
         <echo message="cleaning" />
+        <delete file="tmp-htaccess" />
         <delete dir="untar/" />
         <delete file="deploy.tar/" />
         <delete file="deploy.xml" />
     </target>
 
-    <target name="deploy" depends="untar, pre-clean, app-ini, copy, chmod, dbprepare ,dbmigrate, begin-htaccess, htaccess, write-htaccess, cleanup" />
+    <target name="deploy" depends="untar, pre-clean, app-ini, copy, chmod, dbprepare ,dbmigrate, begin-htaccess, htaccess, write-htaccess, clean" />
 </project>
