@@ -1,22 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project name="${env.JOB_NAME}" default="build" basedir="../">
-
-    <!-- timestamp required for creating unique names -->
-    <tstamp />
+<project name="build" default="build" basedir="../">
 
     <!-- Preparation create required directories -->
     <target name="prepare">
-        <echo msg="Making directory build" />
-        <mkdir dir="build" />
-        <mkdir dir="build/log" />
-        <mkdir dir="build/log/code-browser" />
-        <mkdir dir="build/log/phpunit" />
-        <mkdir dir="api" />
+    <echo msg="Creating directory build" />
+    <mkdir dir="build" />
+    <mkdir dir="build/log" />
+    <mkdir dir="build/log/code-browser" />
+    <mkdir dir="build/log/phpunit" />
+    <mkdir dir="api" />
     </target>
 
-	<!-- Call build.properties for ci server db migration -->
+    <!-- Call build.properties for ci server db migration -->
     <target name="configure">    
-        <property file="/var/lib/jenkins/jobdata/build.properties" />
+        <tstamp />
+        <property file="/var/lib/jenkins/jobdata/template-ZF/build.properties" />
+        <property name="db.name" value="${env.JOB_NAME}-${DSTAMP}${TSTAMP}-${db.name}" override="true" />
     </target>
 
     <!-- Run some tools on the sourcecode -->
@@ -47,7 +46,7 @@
 
     <target name="phpmd">
         <phpmd file="source/application"
-            rulesets="rule">
+            rulesets="codesize,design,unusedcode,naming">
             <formatter type="xml" outfile="build/log/pmd.xml" />
         </phpmd>
     </target>
@@ -100,11 +99,11 @@
     <!-- DBmigrate for the PHPUnit task -->
     <target name="dbprepare">
         <echo msg="Preparing database" />
-        <pdosqlexec url="${db.driver}:host=${db.host}" userid="${db.user}" password="${db.pass}">
-            <fileset dir="deploy/sql/prepare/">
-                <include name="*.sql"/>
-            </fileset>
-        </pdosqlexec>
+            <pdosqlexec url="${db.driver}:host=${db.host}" userid="${db.user}" password="${db.pass}">
+                <fileset dir="deploy/sql/prepare/">
+                    <include name="*.sql"/>
+                </fileset>
+            </pdosqlexec>
         <echo msg="Done preparing the database" />
     </target>
 
@@ -132,14 +131,12 @@
 					password="${db.pass}" src="deploy/sql/scripts/deploy-${DSTAMP}${TSTAMP}.sql">
         </pdosqlexec>
     </target>
-		
-	
+
     <!-- PHPUnit task run unit tests (binary is called phpunit34 because an older version is required for Zend Framework) -->
     <target name="phpunit">
-        <exec executable="phpunit34" dir="source/tests" passthru="true" >
-        </exec>
+        <exec command="phpunit34 | sed -r 's/\x1B\[([0-9]{1,3}((;[0-9]{1,3})*)?)?[m|K]//g'" dir="source/tests" passthru="true" />
     </target>
-	
+		
     <!-- Cleanup the files created by the build which aren't required anymore -->
     <target name="post-cleanup">
         <pdosqlexec url="${db.driver}:host=localhost;dbname=${db.name}" userid="${db.user}" password="${db.pass}" src="deploy/sql/scripts/cleanup.sql" />
@@ -153,6 +150,6 @@
         </delete>
     </target>
 
-    <target name="build" depends="prepare, docblox, codesniffer, phpcpd, phpmd, phpdepend, phploc, phpcb, dbdeploy, app-ini, phpunit, post-cleanup" /> 
-	<target name="dbdeploy" depends="configure, dbprepare, dbmigrate" />
+    <target name="build" depends="prepare, docblox, codesniffer, phpcpd, phpmd, phpdepend, phploc, phpcb, dbdeploy, app-ini, phpunit ,post-cleanup" /> 
+    <target name="dbdeploy" depends="configure, dbprepare, dbmigrate" />
 </project>
