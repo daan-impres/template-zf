@@ -1,0 +1,20 @@
+<phpunit bootstrap="./application/bootstrap.php" colors="true">
+	<testsuite name="Precision Tests">
+		<directory>./</directory>
+	</testsuite>	
+	<filter>
+		<whitelist>
+			<directory suffix=".php">../application</directory>
+			<exclude>
+                <directory suffix=".phtml">../application</directory>
+                <directory>../application/models/DbTable/</directory>
+			</exclude>
+		</whitelist>
+	</filter>
+	
+	<logging>
+        <log type="junit" target="../../build/log/phpunit/junit.xml" />
+		<log type="coverage-clover" target="../../build/log/phpunit/clover.xml" />
+	 	<log type="coverage-html" target="../../build/log/phpunit/report" charset="UTF-8" yui="true" highlight="true" lowUpperBound="50"  highLowerBound="80" />
+	</logging>
+</phpunit>
